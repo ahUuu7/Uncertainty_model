@@ -12,14 +12,13 @@ class FCA_module(nn.Module):
         self.dct_h = dct_h  # 代表频域分析的固定长度 (如 16 或 64)
 
         # 1. 生成 DCT 滤波器权重
-        mapper_x, _ = self.get_dct_filter(dct_h, dct_h, channel)
-        # 适配 1D: 我们只需要时间维度的 DCT 变换，不需要 2D 的 mapper_y
+        mapper_x, _ = self.get_dct_filter(dct_h, dct_h, channel)  # 适配 1D: 我们只需要时间维度的 DCT 变换，不需要 2D 的 mapper_y
         # mapper_x shape: [channel, T]
         self.register_buffer('dct_mapper', mapper_x)
 
         self.adaptive_pool = nn.AdaptiveAvgPool1d(dct_h)  # 先通过自适应池化统一长度
 
-        # 2. 通道注意力网络 (类似于 SE/FCA 的 MLP)
+        # 2. 通道注意力网络
         self.fc = nn.Sequential(
             nn.Linear(channel, channel // reduction, bias=False),
             nn.ReLU(inplace=True),
@@ -27,23 +26,19 @@ class FCA_module(nn.Module):
             nn.Sigmoid()
         )
 
-        self.scale_factor = nn.Parameter(torch.tensor(0.5))
-
     def forward(self, x):
         # x: [B, C, T]
         b, c, t = x.shape
         # [B, C, T] -> [B, C, dct_h]
         x_pooled = self.adaptive_pool(x)
 
-        # [关键步骤] Multi-Spectral DCT Pooling
-        # x: [B, C, T] * dct_mapper: [C, T] -> [B, C, T] -> sum -> [B, C]
-        # 这一步相当于提取了每个通道特定的频率分量，而不是简单的平均值
-        y = torch.sum(x_pooled * self.dct_mapper, dim=2)
+        # Multi-Spectral DCT Pooling
+        # x: [B, C, T] * dct_mapper: [C, T] -> [B, C, T] -> sum -> [B, C]：提取每个通道特定的频率分量，而不是简单的平均值
+        y = torch.sum(x_pooled * self.dct_mapper, dim=2)  
 
-        # Excitation
         y = self.fc(y).view(b, c, 1)
 
-        return y * self.scale_factor
+        return y
 
     def get_dct_filter(self, tile_size_x, tile_size_y, c):
         """
@@ -183,7 +178,6 @@ class Backbone_TSPNet(torch.nn.Module):
         """
         Inputs:
             feat: tensor of size [B, M, roi_size, D] 通过分段池化提取局部特征，强调中间区域的核心地位
-
         Outputs:
             prop_cas:  tensor of size [B, C, M]
             prop_attn: tensor of size [B, 1, M]
@@ -215,7 +209,6 @@ class Backbone_TSPNet(torch.nn.Module):
         bg = 1 - x_atn   # [B, 1, M]
         prop_bg = prop_cas * bg  # [1, C, M]*[B, 1, M]=[B,C,M1*M2]
         prop_attn = x_atn  # [B,1,M] 动作性得分
-        # prop_attn = self.prop_attention(feat_fuse)  # [1, 1, M]
         prop_center = self.prop_completeness(feat_fuse)  # [1, 1, M]
         
         return prop_cas, prop_bg, prop_attn, prop_center, feat_fuse  
@@ -223,38 +216,13 @@ class Backbone_TSPNet(torch.nn.Module):
     def _forward_attn_only(self, feat_fuse, opt):
         """
         只计算注意力分支的 x_atn（含dropout），供训练阶段采样使用
-        
-        Inputs:
-            feat_fuse: tensor of size [B, D, M]
-            opt: 配置选项
-        
-        Outputs:
-            x_atn: tensor of size [B, 1, M] 融合后的注意力权重
         """
         v_atn, _ = self.vAttn(feat_fuse[:, :1024, :], feat_fuse[:, 1024:, :])
         f_atn, _ = self.fAttn(feat_fuse[:, 1024:, :], feat_fuse[:, :1024, :])
 
         x_atn = opt.convex_alpha * f_atn + (1 - opt.convex_alpha) * v_atn
-        
         return x_atn
-
-    # def forward_heads(self, feat_fuse, **args):
-    #     """
-    #     前向计算所有分类头，复用 _forward_attn_only 计算注意力权重
-    #     中心/CLS 头保持单次前向，不再重复计算
-    #     """
-    #     # 复用注意力分支
-    #     x_atn = self._forward_attn_only(feat_fuse, args['opt'])
-    #
-    #     # 利用动作无关注意力头生成前景注意力权重，沿时间维度融合以获得前景注意力加权CAS_fg
-    #     prop_cas = self.prop_classifier(feat_fuse)  # [1, C, M] 动作序列
-    #     bg = 1 - x_atn   # [B, 1, M]
-    #     prop_bg = prop_cas * bg  # 仅保留cas中背景区域的置信度
-    #     prop_attn = prop_cas * x_atn  # 仅保留cas中背景区域的置信度 [B, C, M]
-    #     prop_center = self.prop_completeness(feat_fuse)  # [1, 1, M]
-    #
-    #     return prop_cas, prop_bg, prop_attn, prop_center
-
+    
 
 class TSPNet_Model(nn.Module):
     def __init__(self, args):
@@ -325,7 +293,6 @@ class TSPNet_Model(nn.Module):
         
         # 训练时添加高斯噪声，模拟边界模糊
         if is_training:
-            # 规范化噪声：使其强度与feature-dim-wise的标准差成正比
             feat_std = prop_features.std(dim=[0,1], keepdim=True)
             noise = torch.randn_like(prop_features) * (feat_std * self.noise_ratio)
             # 控制上限：将噪声限制在一倍标准差内，防止噪声过大
@@ -347,17 +314,9 @@ class TSPNet_Model(nn.Module):
             prop_features, opt=self.args)
         return prop_cas, prop_bg, prop_attn, prop_center, feat_fuse
 
-    # def forward_heads(self, feat_fuse):
-    #     return self.prop_backbone.forward_heads(feat_fuse, opt=self.args)
     
     def forward_attn_only(self, feat_fuse):
         """
         只计算注意力分支，供 trainer 访问
-        
-        Inputs:
-            feat_fuse: tensor of size [B, D, M]
-        
-        Outputs:
-            x_atn: tensor of size [B, 1, M] 融合后的注意力权重
         """
         return self.prop_backbone._forward_attn_only(feat_fuse, self.args)
