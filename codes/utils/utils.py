@@ -228,15 +228,13 @@ def csv_metrics(dmap_detect, csv_path, step):
     """
     基于 ANETdetection 实例记录评估结果到 CSV 文件
     如果文件不存在会自动创建并写入表头；如果存在则追加数据
-
     Args:
         dmap_detect: 执行完 evaluate() 后的 ANETdetection 实例
         csv_path: 保存路径
         step: 当前的进度/迭代次数
     """
 
-    # 2. 从 dmap_detect 实例中提取数据
-    # 注意：根据 eval_detectionpmil.py，mAP 是一个数组，对应不同的 tiou_thresholds
+    # 从 dmap_detect 实例中提取数据
     thresholds = dmap_detect.tiou_thresholds
     pred = len(dmap_detect.prediction)
     mAP_values = dmap_detect.mAP
@@ -244,7 +242,6 @@ def csv_metrics(dmap_detect, csv_path, step):
     step = (step / 2000) * 100
     step_str = f"{int(step)}%"
 
-    # 3. 构建一行数据字典
     row_data = {
         'Progress': step_str,
         'Average-mAP': round(avg_mAP, 7)
@@ -258,14 +255,9 @@ def csv_metrics(dmap_detect, csv_path, step):
             row_data[col_name] = round(mAP_values[i], 7)
     row_data['Number of predictions'] = pred
 
-    # 4. 转换为 DataFrame
     df = pd.DataFrame([row_data])
 
-    # 5. 写入文件逻辑
-    # mode='a' 表示追加模式
-    # header: 如果文件不存在，则写入表头；如果已存在，则不写入表头
     write_header = not os.path.exists(csv_path)
-
     try:
         df.to_csv(csv_path, mode='a', index=False, header=write_header)
         print(f"[Log] Test metrics saved to: {csv_path}")
