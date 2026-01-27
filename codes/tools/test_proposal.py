@@ -137,11 +137,8 @@ def test_proposal(config,
 
         # 选择动作类别的top-k策略
         if len(pred) > 2:
-            # 获取这些候选类别的具体得分
             candidate_scores = pred_vid_score[pred]
-            # 找出得分最高的 3 个的索引（注意这里argsort返回的是局部索引）
             top3_indices = np.argsort(candidate_scores)[::-1][:3]
-            # 映射回全局类别ID
             pred = pred[top3_indices]
 
         # Top-1 策略：如果没有一个类别得分高于0.1的，则取得分最高的作为预测结果
