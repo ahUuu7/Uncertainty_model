@@ -54,12 +54,6 @@ class Exp(object):
         loader = iter(train_loader)
         for itr in tqdm(range(1, self.config.num_itr + 1), total=self.config.num_itr):
             train1 = time.time()
-            # 设定在 xxx 步 (xx%进度) 时衰减
-            if itr == int(self.config.num_itr * self.config.decay_process):
-                new_lr = self.config.lr * 0.1  # 将 5e-5 降为 5e-6
-                for param_group in optimizer.param_groups:
-                    param_group['lr'] = new_lr
-                print(f"\n [System] Learning Rate decayed to {new_lr} at step {itr}")
 
             if (itr - 1) % (len(train_loader) // self.config.batch_size) == 0:
                 loader = iter(train_loader)
