@@ -52,7 +52,7 @@ class FCA_module(nn.Module):
         for i in range(c):
             # 确定当前通道 i 应该使用哪个频率分量 u
             u = i % tile_size_x
-            # DCT-II 公式: cos(pi * u * (2k + 1) / 2N)
+            # DCT-II 公式: cos(pi * u * (2k + 1) / 2N)  
             dct_kernel = torch.cos((math.pi / tile_size_x) * u * (basis + 0.5))
             # 归一化系数
             if u == 0:
