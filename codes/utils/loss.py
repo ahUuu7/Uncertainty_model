@@ -26,31 +26,18 @@ class PTAL_Loss(nn.Module):
         prop_cas = inputs[0].permute(0, 2, 1)  # [B, T, C]
         prop_att = inputs[1].permute(0, 2, 1)  # 已经在模型中sigmoid过了
         point_label = inputs[2]
-        # target_T = prop_cas.shape[1]
-        #
-        # if point_label.shape[1] != target_T:
-        #     point_label = point_label.permute(0, 2, 1)
-
-        # 1. 计算 Logits
         logits = prop_cas * prop_att
-
-        # 2. 构建 Hard Label (不进行 Label Smoothing)
+        
         point_label = torch.cat((point_label, torch.zeros_like(point_label[:, :, [0]])), dim=-1)
         point_label[:, torch.where(torch.sum(point_label[0, :, :], dim=-1) == 0)[0], -1] = 1
-
-        # 3. 标准交叉熵 (使用 Hard Label)
-        # 论文 Eq (6): H(y, q)
-        log_probs = F.log_softmax(logits, dim=-1)
+        
+        log_probs = F.log_softmax(logits, dim=-1)  # H(y, q)
         loss_fuse = - (point_label * log_probs).sum(dim=-1).mean()
 
-        # 4. MaxSup 正则化项
-        # 论文 Eq (8): alpha * (z_max - z_mean)
+        # MaxSup 正则化项：alpha * (z_max - z_mean)无论预测对错，都压制最大值，防止过拟合噪声
         if alpha > 0:
-            # z_max: 当前模型预测最强的那个类别的 logit
             z_max = torch.max(logits, dim=-1)[0]
-            # z_mean: 所有类别的 logit 均值
             z_mean = torch.mean(logits, dim=-1)
-            # 公式 (8): alpha * (z_max - mean(z)):正则项：无论预测对错，都压制最大值，防止过拟合噪声
             loss_maxsup = alpha * (z_max - z_mean).mean()
             return loss_fuse + loss_maxsup
 
@@ -74,8 +61,7 @@ class PTAL_Loss(nn.Module):
         """
         attn_var = inputs[0]  # [B, 1, M]
         prop_center = inputs[1]    # [B, 1, M]
-        
-        # 使用 sigmoid(center) 作为权重：高质量提议应有低方差
+    
         w_center = torch.sigmoid(prop_center).detach() # [B, 1, M] +.detach()
         w_var = attn_var * w_center  # 加权方差：鼓励高置信度 proposal 的注意力保持一致,[B, 1, M]
         loss = torch.mean(w_var)
