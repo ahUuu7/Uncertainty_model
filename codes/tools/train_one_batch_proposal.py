@@ -44,11 +44,8 @@ def train_one_proposal_batch(config,
         if mc_samples > 1:
     
             attn_tracker = RunningVar()  # 初始化 RunningVar 统计器，仅跟踪 x_atn
-            
-            x_atn_first = model.forward_attn_only(feat_fuse)
-            attn_tracker.update(x_atn_first)
-
-            for _ in range(mc_samples - 1):
+          
+            for _ in range(mc_samples):
                 x_atn = model.forward_attn_only(feat_fuse)
                 attn_tracker.update(x_atn)
 
