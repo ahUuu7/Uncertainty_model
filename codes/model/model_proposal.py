@@ -33,11 +33,10 @@ class FCA_module(nn.Module):
         x_pooled = self.adaptive_pool(x)
 
         # Multi-Spectral DCT Pooling
-        # x: [B, C, T] * dct_mapper: [C, T] -> [B, C, T] -> sum -> [B, C]：提取每个通道特定的频率分量，而不是简单的平均值
+        # x: [B, C, dct_h(T)] * dct_mapper: [C, dct_h(T)] -> [B, C, T] -> sum -> [B, C]：提取每个通道特定的频率分量，而不是简单的平均值
         y = torch.sum(x_pooled * self.dct_mapper, dim=2)  
 
         y = self.fc(y).view(b, c, 1)
-
         return y
 
     def get_dct_filter(self, tile_size_x, tile_size_y, c):
@@ -98,11 +97,10 @@ class Attn(torch.nn.Module):
 
         # 通道注意力卷积层
         self.channel_Attn = FCA_module(feat_dim, dct_h=roi_size)  # 传入roi_size=16
+        
         # self.channel_Attn = ECA_module(feat_dim)
-
         # self.channel_avg = nn.AdaptiveAvgPool1d(1)  # 通道维度平均池化
-        # self.channel_conv = nn.Sequential(nn.Conv1d(feat_dim,
-        # embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
+        # self.channel_conv = nn.Sequential(nn.Conv1d(feat_dim, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
 
         # 注意力生成网络
         self.attention = nn.Sequential(nn.Conv1d(embed_dim, 512, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5),
