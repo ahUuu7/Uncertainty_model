@@ -86,7 +86,7 @@ class FCA_module(nn.Module):
 
 
 class Attn(torch.nn.Module):
-    def __init__(self, feat_dim, temperature, roi_size=16):
+    def __init__(self, feat_dim, temperature, dct_h=16):
         super().__init__()
         embed_dim = 1024
         self.tau = temperature
@@ -96,7 +96,7 @@ class Attn(torch.nn.Module):
             nn.Conv1d(feat_dim//2, embed_dim, 3, padding=1), nn.LeakyReLU(0.2), nn.Dropout(0.5))
 
         # 通道注意力卷积层
-        self.channel_Attn = FCA_module(feat_dim, dct_h=roi_size)  # 传入roi_size=16
+        self.channel_Attn = FCA_module(feat_dim, dct_h=dct_h)  # 传入dct_h=16
         
         # self.channel_Attn = ECA_module(feat_dim)
         # self.channel_avg = nn.AdaptiveAvgPool1d(1)  # 通道维度平均池化
