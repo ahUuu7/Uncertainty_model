@@ -250,7 +250,6 @@ def csv_metrics(dmap_detect, csv_path, step):
     # 动态添加每个阈值的 mAP (例如 mAP@0.3, mAP@0.4 ...)
     for i, thr in enumerate(thresholds):
         col_name = f'mAP@{thr:.2f}'
-        # 防止索引越界（虽然通常长度是一致的）
         if i < len(mAP_values):
             row_data[col_name] = round(mAP_values[i], 7)
     row_data['Number of predictions'] = pred
@@ -365,9 +364,7 @@ def get_mc_samples(current_epoch, total_epochs, mc_config=None):
         'stage1_ratio': 0.2,
         'stage2_ratio': 0.6,
         'stage1_k': 1,
-        # 20%-60% 区间默认更强约束，默认为3，可由配置改为2
         'stage2_k': 2,
-        # 60%-100% 区间默认最强，默认为4，可由配置改为3
         'stage3_k': 3,
         # 可选：允许直接传入候选列表并指定索引
         'stage2_choices': None,
@@ -399,11 +396,11 @@ def get_mc_samples(current_epoch, total_epochs, mc_config=None):
     progress = current_epoch / total_epochs
     
     if progress < cfg['stage1_ratio']:
-        return stage1_k  # 前20%不启用MC（或K=1）
+        return stage1_k  
     elif progress < cfg['stage2_ratio']:
-        return stage2_k  # 20%-60%启用MC，K=2或3
+        return stage2_k
     else:
-        return stage3_k  # 60%-100%增强不确定性，K=3或4
+        return stage3_k
 
 def train_metrics(csv_path, iteration, lr, total_loss, extra_info=None):
     """
@@ -415,23 +412,16 @@ def train_metrics(csv_path, iteration, lr, total_loss, extra_info=None):
         loss: 当前损失
         extra_info: (可选) 字典，包含其他需要记录的参数，如 MaxSup_Alpha, MC_Weight
     """
-    # 1. 准备数据字典
     row_data = {
         'Iteration': iteration,
         'Learning_Rate': lr,
         'Total_Loss': round(total_loss, 6)
     }
-    
-    # 如果有额外的参数（如动态调整的 alpha），也合并进来
     if extra_info:
         for k, v in extra_info.items():
             row_data[k] = round(v, 6) if isinstance(v, float) else v
-
-    # 2. 转换为 DataFrame
+          
     df = pd.DataFrame([row_data])
-
-    # 3. 写入文件逻辑
-    # 如果文件不存在，则写入表头；如果已存在，则追加数据且不写入表头
     write_header = not os.path.exists(csv_path)
 
     try:
